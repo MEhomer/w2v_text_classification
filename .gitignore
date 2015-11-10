@@ -1,0 +1,7 @@
+test_data/
+results/
+logs/
+ClassificationBacheloreThesis.sublime-project
+ClassificationBacheloreThesis.sublime-workspace
+*.pyc
+data/
