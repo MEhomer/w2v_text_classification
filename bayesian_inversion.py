@@ -125,11 +125,11 @@ def train_word2vec(dataset, num_categories, size=100, alpha=0.025, window=5, ski
     logger = util.get_logger(logger_name)
 
     logger.info('Function={0}, NumCategories={1}, Size={2}, Alpha={3}, Window={4}, Skipgram={5}, HierarchicalSoftmax={6}, NegativeSamplers={7}, CbowMean={8}, Iterations={9}, Workers={10}, Message="{11}"'.format(
-            inspect.currentframe().f_code.co_name,
-            num_categories, size, alpha, window, skipgram, 
-            hierarchical_softmax, negative, cbow_mean, iterations, workers,
-            'Word2vec model training started'
-            ))
+        inspect.currentframe().f_code.co_name,
+        num_categories, size, alpha, window, skipgram,
+        hierarchical_softmax, negative, cbow_mean, iterations, workers,
+        'Word2vec model training started'
+        ))
 
     basemodel = gensim.models.Word2Vec(size=size, alpha=alpha, window=window, sg=skipgram, hs=hierarchical_softmax, negative=negative, cbow_mean=cbow_mean, iter=iterations, workers=workers)
     basemodel.build_vocab(sentence_iterator(dataset, range(num_categories)))
@@ -139,7 +139,7 @@ def train_word2vec(dataset, num_categories, size=100, alpha=0.025, window=5, ski
     for class_id in range(num_categories):
         slist = list(sentence_iterator(dataset, class_id=[class_id]))
         models[class_id].train(slist, total_examples=len(slist))
-        
+
         logger.info('Function={0}, Class={1}, Sentences={2}, Message="{3}"'.format(
             inspect.currentframe().f_code.co_name,
             util.INVERSE_CLASS_MAP[class_id], len(slist),
