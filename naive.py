@@ -4,12 +4,18 @@
     averaging it. This is weighted average.
 '''
 import os
+import copy
+import time
 import inspect
 
 import gensim
 import numpy as np
 
+from sklearn import metrics
+from sklearn import linear_model
+
 import util
+import cross_validation
 
 def word_list(document):
     '''
@@ -72,6 +78,8 @@ def tfidf_model(dataset, logger_name=__name__):
                 Tfidf scores for every word in every text
             dictionary : <list>
                 The word:id mapings for every word in the corpus
+            tfidf : <gensim.models.TfidfModel>
+                The tfidf trained model
     '''
     logger = util.get_logger(logger_name)
 
@@ -94,7 +102,7 @@ def tfidf_model(dataset, logger_name=__name__):
         'Finished calculate tfidf scores'
         ))
 
-    return tfidf[corpus], dictionary
+    return tfidf[corpus], dictionary, tfidf
 
 def extract_feature(text_tfidf_scores, word2vec_model, dictionary, vec_size):
     '''
@@ -123,7 +131,10 @@ def extract_feature(text_tfidf_scores, word2vec_model, dictionary, vec_size):
             feature_vec += item[1] * word2vec_model[word]
             den += item[1]
 
-    feature_vec = feature_vec / den
+    if len(text_tfidf_scores) != 0 and den != 0:
+        feature_vec = feature_vec / den
+    else:
+        feature_vec = np.zeros(vec_size)
 
     return feature_vec
 
@@ -191,6 +202,148 @@ def train_word2vec(dataset, size=100, alpha=0.025, window=5, skipgram=1, hierarc
 
     return word2vec_model
 
+def evaluate(dataset, model, k_folds=10, shuffle=True, seed=0, logger_name=__name__):
+    '''
+        Evaluates the models
+
+        Arguments:
+            dataset : <list>
+                A list of tuples in format
+                    (class_id <str>, link_address <str>, words_in_sentences <list>)
+                where words_in_sentences is list of list of words
+                    [[word <str>, ...], ...]
+            model : <sklearn.model>
+                A model that will be trained on the training dataset
+            k_folds : <int>
+                Number of folds for training/testing
+                Default value is 10
+            shuffle : <bool>
+                Whether to shuffle the data before spliting it
+                Default value is True
+            seed : <int>
+                Sets the seed of the random number generator
+                Default value is 0
+    '''
+    logger = util.get_logger(logger_name)
+
+    split_data = cross_validation.kfold_items(dataset, k_folds=k_folds, shuffle=shuffle, seed=seed)
+
+    scores = []
+    for i in xrange(len(split_data)):
+        test_data = split_data[i]
+
+        train_data = []
+        for j in xrange(len(split_data)):
+            if i != j:
+                train_data += split_data[j]
+
+        start_time = time.time()
+        word2vec_model = train_word2vec(train_data, iterations=1, logger_name=logger_name)
+        end_time = time.time()
+        train_time_word2vec_model = end_time - start_time
+
+        start_time = time.time()
+        train_tfidf_scores, dictionary, tfidf = tfidf_model(train_data, logger_name=logger_name)
+        end_time = time.time()
+        train_time_tfidf_scores = end_time - start_time
+
+        start_time = time.time()
+        train_features = []
+        for train_text_tfidf_score in train_tfidf_scores:
+            train_features.append(extract_feature(train_text_tfidf_score, word2vec_model, dictionary, 100))
+        end_time = time.time()
+        train_time_feature_extraction = end_time - start_time
+
+        train_classes = []
+        for index in xrange(len(train_data)):
+            train_classes.append(train_data[index][0])
+
+        start_time = time.time()
+        current_model = copy.deepcopy(model)
+        current_model.fit(train_features, train_classes)
+        end_time = time.time()
+        train_time_classification_model = end_time - start_time
+
+        start_time = time.time()
+        test_texts = list(texts_iterator(test_data))
+        test_corpus = [dictionary.doc2bow(text) for text in test_texts]
+        test_tfidf_scores = tfidf[test_corpus]
+        test_features = []
+        for test_text_tfidf_score in test_tfidf_scores:
+            test_features.append(extract_feature(test_text_tfidf_score, word2vec_model, dictionary, 100))
+        end_time = time.time()
+        test_time_feature_extraction = end_time - start_time
+
+        test_classes = []
+        for index in xrange(len(test_data)):
+            test_classes.append(test_data[index][0])
+
+        start_time = time.time()
+        prediction_classes = current_model.predict(test_features)
+        end_time = time.time()
+        test_time_prediction = end_time - start_time
+
+        score = current_model.score(test_features, test_classes)
+        scores.append(score)
+
+        target_names = [util.INVERSE_CLASS_MAP[key] for key in range(len(util.INVERSE_CLASS_MAP))]
+        confusion_matrix = metrics.confusion_matrix(test_classes, prediction_classes)
+        classification_report = metrics.classification_report(test_classes, prediction_classes, target_names=target_names)
+
+        logger.info('Function={0}, Time={1}, Message="{2}"'.format(
+            inspect.currentframe().f_code.co_name,
+            train_time_word2vec_model,
+            'Train time of the word2vec model'
+            ))
+
+        logger.info('Function={0}, Time={1}, Message="{2}"'.format(
+            inspect.currentframe().f_code.co_name,
+            train_time_tfidf_scores,
+            'Train time of the tfidf model'
+            ))
+
+        logger.info('Function={0}, Time={1}, Message="{2}"'.format(
+            inspect.currentframe().f_code.co_name,
+            train_time_feature_extraction,
+            'Required time for feature extraction of the train set'
+            ))
+
+        logger.info('Function={0}, Time={1}, Message="{2}"'.format(
+            inspect.currentframe().f_code.co_name,
+            train_time_classification_model,
+            'Train time of the classification model'
+            ))
+
+        logger.info('Function={0}, Time={1}, Message="{2}"'.format(
+            inspect.currentframe().f_code.co_name,
+            test_time_feature_extraction,
+            'Required time for feature extraction of the test test'
+            ))
+
+        logger.info('Function={0}, Time={1}, Message="{2}"'.format(
+            inspect.currentframe().f_code.co_name,
+            test_time_prediction,
+            'Prediction time of the classification model'
+            ))
+
+        logger.info('Function={0}, Message="{1}", ConfusionMatrix=\n{2}'.format(
+            inspect.currentframe().f_code.co_name,
+            'Confusion matrix of the classification model',
+            confusion_matrix
+            ))
+
+        logger.info('Function={0}, Message="{1}", ClassificationReport=\n{2}'.format(
+            inspect.currentframe().f_code.co_name,
+            'Classification report of the classification model',
+            classification_report
+            ))
+
+    logger.info('Function={0}, Score={1}, Message="{2}"'.format(
+        inspect.currentframe().f_code.co_name,
+        sum(scores) / float(len(scores)),
+        'Mean score of the model',
+        ))
+
 def main():
     '''
         Main entry.
@@ -201,13 +354,9 @@ def main():
 
     dataset = util.read_dataset_threaded(os.path.join('data', 'raw_texts.txt'), processes=2)
 
-    word2vec_model = train_word2vec(dataset, iterations=1, logger_name='NaiveLogger')
-    tfidf_scores, dictionary = tfidf_model(dataset, logger_name='NaiveLogger')
+    model = linear_model.LogisticRegression()
 
-    tmp = []
-    for index, text_tfidf_score in enumerate(tfidf_scores):
-        print index
-        tmp.append(extract_feature(text_tfidf_score, word2vec_model, dictionary, 100))
+    evaluate(dataset, model, k_folds=6, logger_name='NaiveLogger')
 
 if __name__ == '__main__':
     main()

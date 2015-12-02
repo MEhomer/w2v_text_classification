@@ -168,7 +168,7 @@ def process_line(line):
         Returns:
             processed_line : <tuple>
                 The processed line in the format:
-                    (class_id <str>, link_address <str>, words_in_sentences <list>)
+                    (class_id <int>, link_address <str>, words_in_sentences <list>)
     '''
     line = to_unicode(line)
     (class_name, link_address, text) = line.split('\t')
@@ -201,7 +201,7 @@ def read_dataset_threaded(file_name, processes=4):
                 Returns a list of tuples in format
                     (class_id <str>, link_address <str>, words_in_sentences <list>)
                 where words_in_sentences is list of list of words
-                    [[word <str>, ...], ...]
+                    [[word <int>, ...], ...]
     '''
     file_reader = open(file_name, 'r')
     lines = [line for line in file_reader]
