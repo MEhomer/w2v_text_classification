@@ -239,7 +239,7 @@ def evaluate(dataset, k_folds=10, shuffle=True, seed=0, logger_name=__name__):
                 train_data += split_data[j]
 
         start_time = time.time()
-        models = train_word2vec(train_data, len(util.CLASS_MAP), iterations=1, size=300,\
+        models = train_word2vec(train_data, len(util.CLASS_MAP), iterations=1, size=100,\
             logger_name=logger_name)
         end_time = time.time()
         train_time = end_time - start_time

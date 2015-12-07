@@ -199,9 +199,9 @@ def read_dataset_threaded(file_name, processes=4):
         Returns:
             dataset : <list>
                 Returns a list of tuples in format
-                    (class_id <str>, link_address <str>, words_in_sentences <list>)
+                    (class_id <int>, link_address <str>, words_in_sentences <list>)
                 where words_in_sentences is list of list of words
-                    [[word <int>, ...], ...]
+                    [[word <str>, ...], ...]
     '''
     file_reader = open(file_name, 'r')
     lines = [line for line in file_reader]

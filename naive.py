@@ -164,6 +164,7 @@ def train_word2vec(dataset, size=100, alpha=0.025, window=5, skipgram=1, hierarc
                 Default value is: 1
             negative : <int>
                 The number of negative samplings to be used when using Negative Sampling
+                Default value is: 0
             cbow_mean : <int>
                 If the mean of the context words should be used when using CBOW. 1 means yes and
                 0 means no
@@ -175,7 +176,7 @@ def train_word2vec(dataset, size=100, alpha=0.025, window=5, skipgram=1, hierarc
                 Number of workers to be used
                 Default value is: 4
         Returns:
-            word2vec_mode : <gensim.models.Word2Vec>
+            word2vec_model : <gensim.models.Word2Vec>
                 The trained word2vec model
     '''
     logger = util.get_logger(logger_name)
