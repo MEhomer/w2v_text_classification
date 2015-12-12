@@ -210,7 +210,7 @@ def evaluate(dataset, model, k_folds=10, shuffle=True, seed=0, logger_name=__nam
         Arguments:
             dataset : <list>
                 A list of tuples in format
-                    (class_id <str>, link_address <str>, words_in_sentences <list>)
+                    (class_id <int>, link_address <str>, words_in_sentences <list>)
                 where words_in_sentences is list of list of words
                     [[word <str>, ...], ...]
             model : <sklearn.model>
