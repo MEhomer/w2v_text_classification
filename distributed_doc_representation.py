@@ -12,7 +12,7 @@ import inspect
 import gensim
 
 from sklearn import metrics
-from sklearn import linear_model
+from sklearn import linear_model, svm
 
 import util
 import cross_validation
@@ -85,7 +85,7 @@ def extract_features(document, doc2vec_model, trained=True):
     else:
         return doc2vec_model.infer_vector(word_list(document))
 
-def train_doc2vec(dataset, size=100, alpha=0.025, min_alpha=0.001, window=5, dm=1, hierarchical_softmax=1, negative=0, dm_mean=0, dm_concat=0, dbow_words=0, iterations=1, workers=4, logger_name=__name__):
+def train_doc2vec(dataset, size=100, alpha=0.025, min_alpha=0.001, window=5, dm=1, hierarchical_softmax=1, negative=0, dm_mean=0, dm_concat=0, dbow_words=0, iterations=1, workers=4, min_count=2, logger_name=__name__):
     '''
         Trains a doc2vec model using the gensim package.
 
@@ -128,6 +128,9 @@ def train_doc2vec(dataset, size=100, alpha=0.025, min_alpha=0.001, window=5, dm=
             workers : <int>
                 Number of workers to be used
                 Default value is: 4
+            min_count: <int>
+                Minimum count of words to be ignored
+                Default value is: 2
         Returns:
             doc2vec_model : <gensim.models.Doc2Vec>
                 The trained doc2vec model
@@ -142,7 +145,7 @@ def train_doc2vec(dataset, size=100, alpha=0.025, min_alpha=0.001, window=5, dm=
 
     tagged_documents = [to_tagged_document(document) for document in dataset]
 
-    doc2vec_model = gensim.models.Doc2Vec(size=size, alpha=alpha, window=window, dm=dm, hs=hierarchical_softmax, negative=negative, dm_mean=dm_mean, dbow_words=dbow_words, workers=workers)
+    doc2vec_model = gensim.models.Doc2Vec(size=size, alpha=alpha, window=window, dm=dm, hs=hierarchical_softmax, negative=negative, dm_mean=dm_mean, dbow_words=dbow_words, workers=workers, min_count=min_count)
     doc2vec_model.build_vocab(tagged_documents)
 
     delta_alpha = float(alpha - min_alpha) / float(iterations)
@@ -156,9 +159,10 @@ def train_doc2vec(dataset, size=100, alpha=0.025, min_alpha=0.001, window=5, dm=
 
         alpha -= delta_alpha
 
-    logger.info('Function={0}, Taggeddocuments={1}, Message="{2}"'.format(
+    logger.info('Function={0}, Taggeddocuments={1}, Model={2}, Message="{3}"'.format(
         inspect.currentframe().f_code.co_name,
         len(tagged_documents),
+        doc2vec_model,
         'Doc2Vec model training finished'
         ))
 
@@ -205,7 +209,7 @@ def evaluate(dataset, model, k_folds=10, shuffle=True, seed=0, logger_name=__nam
                 train_data += split_data[j]
 
         start_time = time.time()
-        doc2vec_model = train_doc2vec(train_data, logger_name=logger_name, window=10, size=300, workers=8, iterations=25)
+        doc2vec_model = train_doc2vec(train_data, logger_name=logger_name, dm=0, negative=5, hierarchical_softmax=0, window=10, size=100, workers=8, iterations=20)
         end_time = time.time()
         train_time_doc2vec_model = end_time - start_time
 
