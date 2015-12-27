@@ -3,6 +3,7 @@
 '''
 import os
 import re
+import inspect
 import logging
 import multiprocessing
 
@@ -183,7 +184,7 @@ def process_line(line):
 
     return (CLASS_MAP[class_name], link_address, sentences)
 
-def read_dataset_threaded(file_name, processes=4):
+def read_dataset_threaded(file_name, processes=4, logger_name=__name__):
     '''
         Reads the dataset from the file with file_name
         It uses #processes to do the job
@@ -203,6 +204,14 @@ def read_dataset_threaded(file_name, processes=4):
                 where words_in_sentences is list of list of words
                     [[word <str>, ...], ...]
     '''
+    logger = get_logger(logger_name)
+
+    logger.info('Function={0}, FileName={1}, Message="{2}"'.format(
+        inspect.currentframe().f_code.co_name,
+        file_name,
+        'Started processing file'
+        ))
+    
     file_reader = open(file_name, 'r')
     lines = [line for line in file_reader]
     file_reader.close()
@@ -215,7 +224,7 @@ def read_dataset_threaded(file_name, processes=4):
     return dataset
 
 
-def read_dataset(file_name):
+def read_dataset(file_name, logger_name=__name__):
     '''
         Reads the dataset from the file with file_name
         The dataset format in the file is:
@@ -231,6 +240,14 @@ def read_dataset(file_name):
                 where words_in_sentences is list of list of words
                     [[word <str>, ...], ...]
     '''
+    logger = get_logger(logger_name)
+
+    logger.info('Function={0}, FileName={1}, Message="{2}"'.format(
+        inspect.currentframe().f_code.co_name,
+        file_name,
+        'Started processing file'
+        ))
+
     file_reader = open(file_name, 'r')
     lines = [line for line in file_reader]
     file_reader.close()

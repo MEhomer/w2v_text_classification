@@ -76,18 +76,12 @@ def sentence_iterator(dataset, class_id):
             for sentence in line[2]:
                 yield sentence
 
-def train_word2vec(dataset, num_categories, size=100, alpha=0.025, window=5, skipgram=1, \
-    hierarchical_softmax=1, negative=0, cbow_mean=1, iterations=10, workers=4,\
-     logger_name=__name__):
+def make_word2vec(size=100, alpha=0.025, window=5, skipgram=1, hierarchical_softmax=1, negative=0,\
+    cbow_mean=1, iterations=10, workers=4):
     '''
-        Trains a word2vec model for every category in the dataset defined by num_categories.
+        Initialize a word2vec model using the gensim package
 
         Arguments:
-            dataset : <list>
-                The dataset on which the word2vec models will be trained
-            num_categories : <int>
-                The number of categories in dataset, also the number of word2vec models
-                which will be trained
             size : <int>
                 Size of the word embedings (vectors) by word2vec
                 Default value is: 100
@@ -118,20 +112,41 @@ def train_word2vec(dataset, num_categories, size=100, alpha=0.025, window=5, ski
                 Number of workers to be used
                 Default value is: 4
         Returns:
+            word2vec_model : <gensim.models.Word2Vec>
+                The word2vec model
+    '''
+    word2vec_model = gensim.models.Word2Vec(size=size, alpha=alpha, window=window, sg=skipgram,\
+        hs=hierarchical_softmax, negative=negative, cbow_mean=cbow_mean, iter=iterations,\
+        workers=workers)
+
+    return word2vec_model
+
+
+def train_word2vec(dataset, num_categories, basemodel, logger_name=__name__):
+    '''
+        Trains a word2vec model for every category in the dataset defined by num_categories.
+
+        Arguments:
+            dataset : <list>
+                The dataset on which the word2vec models will be trained
+            num_categories : <int>
+                The number of categories in dataset, also the number of word2vec models
+                which will be trained
+            basemodel : <gensim.models.Word2Vec>
+                The base word2vec model
+        Returns:
             word2vec_models : <list>
                 List of trained word2vec models
 
     '''
     logger = util.get_logger(logger_name)
 
-    logger.info('Function={0}, NumCategories={1}, Size={2}, Alpha={3}, Window={4}, Skipgram={5}, HierarchicalSoftmax={6}, NegativeSamplers={7}, CbowMean={8}, Iterations={9}, Workers={10}, Message="{11}"'.format(
+    logger.info('Function={0}, NumCategories={1}, Word2Vec={2}, Message="{3}"'.format(
         inspect.currentframe().f_code.co_name,
-        num_categories, size, alpha, window, skipgram,
-        hierarchical_softmax, negative, cbow_mean, iterations, workers,
+        num_categories, basemodel,
         'Word2vec model training started'
         ))
 
-    basemodel = gensim.models.Word2Vec(size=size, alpha=alpha, window=window, sg=skipgram, hs=hierarchical_softmax, negative=negative, cbow_mean=cbow_mean, iter=iterations, workers=workers)
     basemodel.build_vocab(sentence_iterator(dataset, range(num_categories)))
 
     models = [copy.deepcopy(basemodel) for i in range(num_categories)]
@@ -205,7 +220,7 @@ def docsprob(docs, models, logger_name=__name__):
 
     return np.array(prob).tolist()
 
-def evaluate(dataset, k_folds=10, shuffle=True, seed=0, logger_name=__name__):
+def evaluate(dataset, word2vec_model, k_folds=10, shuffle=True, seed=0, logger_name=__name__):
     '''
         Evaluate the models
 
@@ -215,6 +230,8 @@ def evaluate(dataset, k_folds=10, shuffle=True, seed=0, logger_name=__name__):
                     (class_id <str>, link_address <str>, words_in_sentences <list>)
                 where words_in_sentences is list of list of words
                     [[word <str>, ...], ...]
+            word2vec_model : <gensim.models.Word2Vec>
+                The base word2vec model
             k_folds : <int>
                 Number of folds for training/testing
                 Default value is 10
@@ -239,8 +256,8 @@ def evaluate(dataset, k_folds=10, shuffle=True, seed=0, logger_name=__name__):
                 train_data += split_data[j]
 
         start_time = time.time()
-        models = train_word2vec(train_data, len(util.CLASS_MAP), iterations=1, size=100,\
-            logger_name=logger_name)
+        basemodel = copy.deepcopy(word2vec_model)
+        models = train_word2vec(train_data, len(util.CLASS_MAP), basemodel, logger_name=logger_name)
         end_time = time.time()
         train_time = end_time - start_time
 
@@ -264,7 +281,8 @@ def evaluate(dataset, k_folds=10, shuffle=True, seed=0, logger_name=__name__):
 
         target_names = [util.INVERSE_CLASS_MAP[key] for key in range(len(util.INVERSE_CLASS_MAP))]
         confusion_matrix = metrics.confusion_matrix(trues, predictions)
-        classification_report = metrics.classification_report(trues, predictions, target_names=target_names)
+        classification_report = metrics.classification_report(trues, predictions,\
+            target_names=target_names)
 
         score = float(correct_count) / float(len(test_data))
         scores.append(score)
@@ -283,13 +301,13 @@ def evaluate(dataset, k_folds=10, shuffle=True, seed=0, logger_name=__name__):
 
         logger.info('Function={0}, Message="{1}", ConfusionMatrix=\n{2}'.format(
             inspect.currentframe().f_code.co_name,
-            'Confusion matrix of the moddel',
+            'Confusion matrix of the model',
             confusion_matrix
             ))
 
         logger.info('Function={0}, Message="{1}", ClassificationReport=\n{2}'.format(
             inspect.currentframe().f_code.co_name,
-            'Classification report of the moddel',
+            'Classification report of the model',
             classification_report
             ))
 
@@ -305,11 +323,14 @@ def main():
 
         Here goes code for testing the methods and classes of this module.
     '''
-    util.setup_logger('BayesianLogger', os.path.join('logs', 'bayesian_inversion.log'))
+    logger_name = 'BayesianLogger'
+    util.setup_logger(logger_name, os.path.join('logs', 'bayesian_inversion.log'))
 
-    dataset = util.read_dataset_threaded(os.path.join('data', 'raw_texts.txt'), processes=10)
+    word2vec_model = make_word2vec(iterations=1, size=100)
+    dataset = util.read_dataset_threaded(os.path.join('data', 'raw_texts.txt'), processes=10,\
+        logger_name=logger_name)
 
-    evaluate(dataset, k_folds=6, logger_name='BayesianLogger')
+    evaluate(dataset, word2vec_model, k_folds=6, logger_name=logger_name)
 
 if __name__ == '__main__':
     main()

@@ -138,14 +138,12 @@ def extract_feature(text_tfidf_scores, word2vec_model, dictionary, vec_size):
 
     return feature_vec
 
-def train_word2vec(dataset, size=100, alpha=0.025, window=5, skipgram=1, hierarchical_softmax=1,\
-    negative=0, cbow_mean=1, iterations=10, workers=4, logger_name=__name__):
+def make_word2vec(size=100, alpha=0.025, window=5, skipgram=1, hierarchical_softmax=1,\
+    negative=0, cbow_mean=1, iterations=1, workers=4, logger_name=__name__):
     '''
-        Trains a word2vec model using the gensim package.
+        Initialize a word2vec model using the gensim package.
 
         Arguments:
-            dataset : <list>
-                The dataset on which the word2vec model will be trained
             size : <int>
                 Size of the word embedings (vectors) by word2vec
                 Default value is: 100
@@ -171,7 +169,7 @@ def train_word2vec(dataset, size=100, alpha=0.025, window=5, skipgram=1, hierarc
                 Default value is: 1
             iterations : <int>
                 Number of iteration through the dataset
-                Default value is: 10
+                Default value is: 1
             workers : <int>
                 Number of workers to be used
                 Default value is: 4
@@ -184,14 +182,37 @@ def train_word2vec(dataset, size=100, alpha=0.025, window=5, skipgram=1, hierarc
         inspect.currentframe().f_code.co_name,
         size, alpha, window, skipgram, hierarchical_softmax,
         negative, cbow_mean, iterations, workers,
+        'Word2Vec model initialized',
+        ))
+
+    word2vec_model = gensim.models.Word2Vec(size=size, alpha=alpha, window=window, sg=skipgram,\
+        hs=hierarchical_softmax, negative=negative, cbow_mean=cbow_mean, iter=iterations,\
+        workers=workers)
+
+    return word2vec_model
+
+def train_word2vec(dataset, word2vec_model, logger_name=__name__):
+    '''
+        Trains a word2vec model using the gensim package.
+
+        Arguments:
+            dataset : <list>
+                The dataset on which the word2vec model will be trained
+            word2vec_model : <gensim.models.Word2Vec>
+                The word2vec model to be trained
+        Returns:
+            word2vec_model : <gensim.models.Word2Vec>
+                The trained word2vec model
+    '''
+    logger = util.get_logger(logger_name)
+    logger.info('Function={0}, Word2Vec={1} Message="{2}"'.format(
+        inspect.currentframe().f_code.co_name,
+        word2vec_model,
         'Word2Vec model training started',
         ))
 
     sentences = list(sentence_iterator(dataset))
 
-    word2vec_model = gensim.models.Word2Vec(size=size, alpha=alpha, window=window, sg=skipgram,\
-        hs=hierarchical_softmax, negative=negative, cbow_mean=cbow_mean, iter=iterations,\
-        workers=workers)
     word2vec_model.build_vocab(sentences)
     word2vec_model.train(sentences, total_examples=len(sentences))
 
@@ -203,7 +224,7 @@ def train_word2vec(dataset, size=100, alpha=0.025, window=5, skipgram=1, hierarc
 
     return word2vec_model
 
-def evaluate(dataset, model, k_folds=10, shuffle=True, seed=0, logger_name=__name__):
+def evaluate(dataset, model, word2vec_base_model, k_folds=10, shuffle=True, seed=0, logger_name=__name__):
     '''
         Evaluates the models
 
@@ -215,6 +236,8 @@ def evaluate(dataset, model, k_folds=10, shuffle=True, seed=0, logger_name=__nam
                     [[word <str>, ...], ...]
             model : <sklearn.model>
                 A model that will be trained on the training dataset
+            word2vec_base_model : <gensim.models.Word2Vec>
+                The word2vec base model
             k_folds : <int>
                 Number of folds for training/testing
                 Default value is 10
@@ -226,6 +249,12 @@ def evaluate(dataset, model, k_folds=10, shuffle=True, seed=0, logger_name=__nam
                 Default value is 0
     '''
     logger = util.get_logger(logger_name)
+
+    logger.info('Function={0}, model={1}, Word2Vec={2}, K-Folds={3}, Shuffle={4}, Seed={5}, Message="{6}"'.format(
+        inspect.currentframe().f_code.co_name,
+        type(model), word2vec_base_model, k_folds, shuffle, seed,
+        'Started evaluating the model',
+        ))
 
     split_data = cross_validation.kfold_items(dataset, k_folds=k_folds, shuffle=shuffle, seed=seed)
 
@@ -239,7 +268,8 @@ def evaluate(dataset, model, k_folds=10, shuffle=True, seed=0, logger_name=__nam
                 train_data += split_data[j]
 
         start_time = time.time()
-        word2vec_model = train_word2vec(train_data, iterations=1, logger_name=logger_name)
+        word2vec_model = copy.deepcopy(word2vec_base_model)
+        word2vec_model = train_word2vec(train_data, word2vec_model, logger_name=logger_name)
         end_time = time.time()
         train_time_word2vec_model = end_time - start_time
 
@@ -251,7 +281,7 @@ def evaluate(dataset, model, k_folds=10, shuffle=True, seed=0, logger_name=__nam
         start_time = time.time()
         train_features = []
         for train_text_tfidf_score in train_tfidf_scores:
-            train_features.append(extract_feature(train_text_tfidf_score, word2vec_model, dictionary, 100))
+            train_features.append(extract_feature(train_text_tfidf_score, word2vec_model, dictionary, word2vec_model.vector_size))
         end_time = time.time()
         train_time_feature_extraction = end_time - start_time
 
@@ -271,7 +301,7 @@ def evaluate(dataset, model, k_folds=10, shuffle=True, seed=0, logger_name=__nam
         test_tfidf_scores = tfidf[test_corpus]
         test_features = []
         for test_text_tfidf_score in test_tfidf_scores:
-            test_features.append(extract_feature(test_text_tfidf_score, word2vec_model, dictionary, 100))
+            test_features.append(extract_feature(test_text_tfidf_score, word2vec_model, dictionary, word2vec_model.vector_size))
         end_time = time.time()
         test_time_feature_extraction = end_time - start_time
 
@@ -351,13 +381,16 @@ def main():
 
         Here goes code for testing the methods and classes of this module.
     '''
-    util.setup_logger('NaiveLogger', os.path.join('logs', 'naive.log'))
+    logger_name = 'NaiveLogger'
+    util.setup_logger(logger_name, os.path.join('logs', 'naive.log'))
 
-    dataset = util.read_dataset_threaded(os.path.join('data', 'raw_texts.txt'), processes=2)
+    dataset = util.read_dataset_threaded(os.path.join('data', 'raw_texts.txt'), processes=2,\
+        logger_name=logger_name)
 
+    word2vec_base_model = make_word2vec(iterations=1, size=250, logger_name=logger_name)
     model = linear_model.LogisticRegression()
 
-    evaluate(dataset, model, k_folds=6, logger_name='NaiveLogger')
+    evaluate(dataset, model, word2vec_base_model, k_folds=6, logger_name=logger_name)
 
 if __name__ == '__main__':
     main()

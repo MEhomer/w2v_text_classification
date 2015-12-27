@@ -12,7 +12,7 @@ import inspect
 import gensim
 
 from sklearn import metrics
-from sklearn import linear_model, svm
+from sklearn import linear_model
 
 import util
 import cross_validation
@@ -85,22 +85,14 @@ def extract_features(document, doc2vec_model, trained=True):
     else:
         return doc2vec_model.infer_vector(word_list(document))
 
-def train_doc2vec(dataset, size=100, alpha=0.025, min_alpha=0.001, window=5, dm=1, hierarchical_softmax=1, negative=0, dm_mean=0, dm_concat=0, dbow_words=0, iterations=1, workers=4, min_count=2, logger_name=__name__):
+def make_doc2vec(size=100, window=5, dm=1, hierarchical_softmax=1, negative=0, dm_mean=0, dm_concat=0, dbow_words=0, workers=4, min_count=2):
     '''
-        Trains a doc2vec model using the gensim package.
+        Initialize a doc2vec model using the gensim package.
 
         Arguments:
-            dataset : <list>
-                The dataset on which the doc2vec model will be trained
             size : <int>
                 Size of the feature vectors by doc2vec
                 Default value is: 100
-            alpha : <float>
-                Starting learning rate of the model
-                Default value is: 0.025
-            min_alpha : <float>
-                Minimum learning rate of the model
-                Default value is: 0.001
             window : <int>
                 Size of the context
                 Default value is: 5
@@ -122,9 +114,6 @@ def train_doc2vec(dataset, size=100, alpha=0.025, min_alpha=0.001, window=5, dm=
             dbow_words : <int>
                 If it should learn word-vectors.
                 Default value is: 0
-            iterations : <int>
-                Number of iteration through the dataset
-                Default value is: 1
             workers : <int>
                 Number of workers to be used
                 Default value is: 4
@@ -133,24 +122,49 @@ def train_doc2vec(dataset, size=100, alpha=0.025, min_alpha=0.001, window=5, dm=
                 Default value is: 2
         Returns:
             doc2vec_model : <gensim.models.Doc2Vec>
+                The doc2vec model
+    '''
+    doc2vec_model = gensim.models.Doc2Vec(size=size, window=window, dm=dm, hs=hierarchical_softmax, negative=negative, dm_mean=dm_mean, dm_concat=dm_concat, dbow_words=dbow_words, workers=workers, min_count=min_count)
+
+    return doc2vec_model
+
+def train_doc2vec(dataset, doc2vec_model, alpha=0.025, min_alpha=0.001, iterations=1, logger_name=__name__):
+    '''
+        Trains a doc2vec model using the gensim package.
+
+        Arguments:
+            dataset : <list>
+                The dataset on which the doc2vec model will be trained
+            doc2vec_model : <gensim.models.Doc2Vec>
+                The doc2vec model to be trained
+            alpha : <float>
+                Starting learning rate of the model
+                Default value is: 0.025
+            min_alpha : <float>
+                Minimum learning rate of the model
+                Default value is: 0.001
+            iterations : <int>
+                Number of iteration through the dataset
+                Default value is: 1
+        Returns:
+            doc2vec_model : <gensim.models.Doc2Vec>
                 The trained doc2vec model
     '''
     logger = util.get_logger(logger_name)
-    logger.info('Function={0}, Size={1}, Alpha={2}, Window={3}, PV-DM/PV-DBOW={4}, HierarchicalSoftmax={5}, NegativeSamplings={6}, DMMean={7}, DMConcat={8}, DBOWWords={9}, Iterations={10}, Workers={11}, Message="{12}"'.format(
+    logger.info('Function={0}, Doc2Vec={1}, LearningRate={2}, Iterations={3}, Message="{4}"'.format(
         inspect.currentframe().f_code.co_name,
-        size, alpha, window, dm, hierarchical_softmax, negative, dm_mean, dm_concat, dbow_words,
-        iterations, workers,
+        doc2vec_model,
+        alpha, iterations,
         "Doc2Vec model training started"
         ))
 
     tagged_documents = [to_tagged_document(document) for document in dataset]
 
-    doc2vec_model = gensim.models.Doc2Vec(size=size, alpha=alpha, window=window, dm=dm, hs=hierarchical_softmax, negative=negative, dm_mean=dm_mean, dbow_words=dbow_words, workers=workers, min_count=min_count)
     doc2vec_model.build_vocab(tagged_documents)
 
     delta_alpha = float(alpha - min_alpha) / float(iterations)
 
-    for iteration in range(iterations):
+    for _ in range(iterations):
         doc2vec_model.alpha = alpha
         doc2vec_model.min_alpha = alpha
 
@@ -168,7 +182,7 @@ def train_doc2vec(dataset, size=100, alpha=0.025, min_alpha=0.001, window=5, dm=
 
     return doc2vec_model
 
-def evaluate(dataset, model, k_folds=10, shuffle=True, seed=0, logger_name=__name__):
+def evaluate(dataset, model, doc2vec_base_model, alpha=0.025, iterations=1, k_folds=10, shuffle=True, seed=0, logger_name=__name__):
     '''
         Evaluates the models
 
@@ -180,6 +194,14 @@ def evaluate(dataset, model, k_folds=10, shuffle=True, seed=0, logger_name=__nam
                     [[word <str>, ...], ...]
             model : <sklearn.model>
                 A model that will be trained on the training dataset
+            doc2vec_base_model : <gensim.models.Doc2Vec>
+                The doc2vec base model which will be trained
+            alpha : <float>
+                Starting learning rate of the model
+                Default value is: 0.025
+            iterations : <int>
+                Number of iteration through the dataset
+                Default value is: 1
             k_folds : <int>
                 Number of folds for training/testing
                 Default value is 10
@@ -191,9 +213,9 @@ def evaluate(dataset, model, k_folds=10, shuffle=True, seed=0, logger_name=__nam
     '''
     logger = util.get_logger(logger_name)
 
-    logger.info('Function={0}, model={1}, k_folds={2}, shuffle={3}, seed={4}, Message="{5}"'.format(
+    logger.info('Function={0}, model={1}, Doc2Vec={2}, Iterations={3}, LearningRate={4},  k_folds={5}, shuffle={6}, seed={7}, Message="{8}"'.format(
         inspect.currentframe().f_code.co_name,
-        type(model), k_folds, shuffle, seed,
+        type(model), doc2vec_base_model, iterations, alpha, k_folds, shuffle, seed,
         'Started evaluating the model',
         ))
 
@@ -209,7 +231,8 @@ def evaluate(dataset, model, k_folds=10, shuffle=True, seed=0, logger_name=__nam
                 train_data += split_data[j]
 
         start_time = time.time()
-        doc2vec_model = train_doc2vec(train_data, logger_name=logger_name, dm=0, negative=5, hierarchical_softmax=0, window=10, size=100, workers=8, iterations=20)
+        doc2vec_model = copy.deepcopy(doc2vec_base_model)
+        doc2vec_model = train_doc2vec(train_data, doc2vec_model, iterations=iterations, alpha=alpha, logger_name=logger_name)
         end_time = time.time()
         train_time_doc2vec_model = end_time - start_time
 
@@ -305,13 +328,16 @@ def main():
 
         Here goes code for testing the methods and classes of this module.
     '''
-    util.setup_logger('DistributedRepresentationLogger', os.path.join('logs', 'distributed_representation.log'))
+    logger_name = 'DistributedRepresentationLogger'
+    util.setup_logger(logger_name, os.path.join('logs', 'distributed_representation.log'))
 
-    dataset = util.read_dataset_threaded(os.path.join('data', 'raw_texts.txt'), processes=2)
+    dataset = util.read_dataset_threaded(os.path.join('data', 'raw_texts.txt'), processes=2,\
+        logger_name=logger_name)
 
+    doc2vec_base_model = make_doc2vec(dm=0, negative=5, hierarchical_softmax=0, window=10, size=100, workers=8)
     model = linear_model.LogisticRegression()
 
-    evaluate(dataset, model, k_folds=6, logger_name='DistributedRepresentationLogger')
+    evaluate(dataset, model, doc2vec_base_model, k_folds=6, iterations=20, logger_name=logger_name)
 
 if __name__ == '__main__':
     main()
