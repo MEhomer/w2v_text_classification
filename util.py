@@ -8,6 +8,7 @@ import logging
 import multiprocessing
 
 import nltk
+import gensim
 
 CLASS_MAP = {
     'MAKEDONIJA': 0,
@@ -184,6 +185,39 @@ def process_line(line):
 
     return (CLASS_MAP[class_name], link_address, sentences)
 
+def phrase_detection(dataset, delimeter='_'):
+    '''
+        Detects phrases from the dataset.
+
+        Arguments:
+            dataset : <list>
+                The dataset on which the phrases should be detected.
+            delimeter : <str>
+                The glue character used to join phrases.
+        Returns:
+            dataset : <list>
+                The dataset where each phrase have been merge into a single word.
+                The dataset is in format:
+                A list of tuples in format
+                    (class_id <int>, link_address <str>, words_in_sentences <list>)
+                where words_in_sentences is list of list of words
+                    [[word <str>, ...], ...]
+    '''
+    sentences = []
+    for line in dataset:
+        for sentence in line[2]:
+            sentences.append(sentence)
+
+    phrases = gensim.models.phrases.Phrases(sentences)
+
+    for line_num in range(len(dataset)):
+        (class_name, link_address, sentences) = dataset[line_num]
+        
+        sentences = list(phrases[sentences])
+        dataset[line_num] = (class_name, link_address, sentences)
+
+    return dataset
+
 def read_dataset_threaded(file_name, processes=4, logger_name=__name__):
     '''
         Reads the dataset from the file with file_name
@@ -217,12 +251,11 @@ def read_dataset_threaded(file_name, processes=4, logger_name=__name__):
     file_reader.close()
 
     pool = multiprocessing.Pool(processes=processes)
-    dataset = pool.map(process_line, lines)
+    dataset = pool.map(process_line, lines[:10])
     pool.close()
     pool.join()
 
     return dataset
-
 
 def read_dataset(file_name, logger_name=__name__):
     '''
@@ -275,42 +308,21 @@ def main():
 
         Here goes code for testing the methods and classes of this module.
     '''
+    logger_name = 'Testing'
+    setup_logger(logger_name, 'Test.log', to_file=False)
 
-    dataset = read_dataset(os.path.join('data', 'raw_texts.txt'))
+    dataset = read_dataset_threaded(os.path.join('data', 'raw_texts.txt'), processes=4,
+        logger_name=logger_name)
 
-    sample_row = dataset[0]
+    dataset = phrase_detection(dataset)
 
-    print sample_row[0], sample_row[1]
-
-    for sentence in sample_row[2]:
-        print 'Sentence:'
-        print '['
-
-        for word in sentence:
-            print '\t%s' %(word)
-        print ']'
-
-    # pickle.dump(dataset, open(os.path.join('test_data', 'dataset_sentences.cPickle'), 'wb'))
-
-    # reader = open(os.path.join('data', 'raw_texts.txt'), 'r')
-    # lines = [line for line in reader]
-    # reader.close()
-
-    # sentences = []
-    # i = 0
-    # for line in lines:
-    #     print i
-    #     i += 1
-    #     line = to_unicode(line)
-    #     text = line.split('\t')[2]
-
-    #     for sentence in sentence_tokenizer(text):
-    #         sentence = sentence.lower()
-    #         sentence.strip()
-
-    #         sentences.append(word_tokenizer(sentence))
-
-    # print len(sentences)
+    print dataset
+    for line in dataset:
+        for sentence in line[2]:
+            for word in sentence:
+                print word,
+                print '-',
+            print ''
 
 if __name__ == '__main__':
     main()
