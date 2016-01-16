@@ -77,7 +77,7 @@ def sentence_iterator(dataset, class_id):
                 yield sentence
 
 def make_word2vec(size=100, alpha=0.025, window=5, skipgram=1, hierarchical_softmax=1, negative=0,\
-    cbow_mean=1, iterations=10, workers=4):
+    cbow_mean=1, iterations=10, workers=4, sample=0, logger_name=__name__):
     '''
         Initialize a word2vec model using the gensim package
 
@@ -91,10 +91,10 @@ def make_word2vec(size=100, alpha=0.025, window=5, skipgram=1, hierarchical_soft
             window : <int>
                 Size of the context
                 Default value is: 5
-            sg : <int>
+            skipgram : <int>
                 Defines the training algorithm. 1 for Skipgram and 0 for CBOW
                 Default value is: 1
-            hs : <int>
+            hierarchical_softmax : <int>
                 Defines the optimization algorithm. 1 for Hierarchical Softmax and 0 for Negative
                 Sampling
                 Default value is: 1
@@ -115,9 +115,17 @@ def make_word2vec(size=100, alpha=0.025, window=5, skipgram=1, hierarchical_soft
             word2vec_model : <gensim.models.Word2Vec>
                 The word2vec model
     '''
+    logger = util.get_logger(logger_name)
+
+    logger.info('Function={0}, Size={1}, Alpha={2}, Window={3}, Skipgram={4}, HierarchicalSoftmax={5}, Negative={6}, CBOWMean={7}, Iterations={8}, Sample={9}, Message="{10}"'.format(
+        inspect.currentframe().f_code.co_name,
+        size, alpha, window, skipgram, hierarchical_softmax, negative, cbow_mean, iterations,
+        sample,
+        'Word2vec model training started'
+        ))
     word2vec_model = gensim.models.Word2Vec(size=size, alpha=alpha, window=window, sg=skipgram,\
         hs=hierarchical_softmax, negative=negative, cbow_mean=cbow_mean, iter=iterations,\
-        workers=workers)
+        workers=workers, sample=sample)
 
     return word2vec_model
 
@@ -211,12 +219,18 @@ def docsprob(docs, models, logger_name=__name__):
 
     sentlist = [sentence for doc in docs for sentence in doc[2]]
 
+    print 'After Sentlist'
+
     log_probability_sent = np.array([model.score(sentlist, len(sentlist)) for model in models])
     prob_sent = np.exp(log_probability_sent - log_probability_sent.max(axis=0))
+
+    print 'After Probsent'
 
     prob = pd.DataFrame((prob_sent/prob_sent.sum(axis=0)).transpose())
     prob["doc"] = [i for i, doc in enumerate(docs) for s in doc[2]]
     prob = prob.groupby("doc").mean()
+
+    print 'After Mean'
 
     return np.array(prob).tolist()
 
@@ -311,6 +325,11 @@ def evaluate(dataset, word2vec_model, k_folds=10, shuffle=True, seed=0, logger_n
             classification_report
             ))
 
+        models = None
+        probs = None
+        predictions = None
+        trues = None
+
     logger.info('Function={0}, Score={1}, Message="{2}"'.format(
         inspect.currentframe().f_code.co_name,
         sum(scores) / float(len(scores)),
@@ -325,9 +344,13 @@ def main():
     '''
     logger_name = 'BayesianLogger'
     util.setup_logger(logger_name, os.path.join('logs', 'bayesian_inversion.log'))
+    logger = util.get_logger(logger_name)
 
-    word2vec_model = make_word2vec(iterations=1, size=100)
-    dataset = util.read_dataset_threaded(os.path.join('data', 'raw_texts.txt'), processes=10,\
+    logger.info('ID={0}'.format(time.time()))
+
+    word2vec_model = make_word2vec(iterations=13, size=100, skipgram=0, alpha=0.05, workers=4, 
+        logger_name=logger_name)
+    dataset = util.read_dataset_threaded(os.path.join('data', 'raw_texts.txt'), processes=10,
         logger_name=logger_name)
 
     evaluate(dataset, word2vec_model, k_folds=6, logger_name=logger_name)

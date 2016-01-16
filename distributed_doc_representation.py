@@ -334,7 +334,7 @@ def main():
     dataset = util.read_dataset_threaded(os.path.join('data', 'raw_texts.txt'), processes=2,\
         logger_name=logger_name)
 
-    doc2vec_base_model = make_doc2vec(dm=0, negative=5, hierarchical_softmax=0, window=10, size=100, workers=8)
+    doc2vec_base_model = make_doc2vec(dm=0, negative=5, hierarchical_softmax=0, window=10, size=400, workers=8)
     model = linear_model.LogisticRegression()
 
     evaluate(dataset, model, doc2vec_base_model, k_folds=6, iterations=20, logger_name=logger_name)

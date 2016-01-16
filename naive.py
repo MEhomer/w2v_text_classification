@@ -139,7 +139,7 @@ def extract_feature(text_tfidf_scores, word2vec_model, dictionary, vec_size):
     return feature_vec
 
 def make_word2vec(size=100, alpha=0.025, window=5, skipgram=1, hierarchical_softmax=1,\
-    negative=0, cbow_mean=1, iterations=1, workers=4, logger_name=__name__):
+    negative=0, cbow_mean=1, iterations=1, sample=0, workers=4, logger_name=__name__):
     '''
         Initialize a word2vec model using the gensim package.
 
@@ -175,19 +175,19 @@ def make_word2vec(size=100, alpha=0.025, window=5, skipgram=1, hierarchical_soft
                 Default value is: 4
         Returns:
             word2vec_model : <gensim.models.Word2Vec>
-                The trained word2vec model
+                The word2vec model
     '''
     logger = util.get_logger(logger_name)
-    logger.info('Function={0}, Size={1}, Alpha={2}, Window={3}, Skipgram={4}, HierarchicalSoftmax={5}, NegativeSamplings={6}, CbowMean={7}, Iterations={8}, Workers={9}, Message="{10}"'.format(
+    logger.info('Function={0}, Size={1}, Alpha={2}, Window={3}, Skipgram={4}, HierarchicalSoftmax={5}, NegativeSamplings={6}, CbowMean={7}, Iterations={8}, Sample={9}, Workers={10}, Message="{11}"'.format(
         inspect.currentframe().f_code.co_name,
         size, alpha, window, skipgram, hierarchical_softmax,
-        negative, cbow_mean, iterations, workers,
+        negative, cbow_mean, iterations, workers, sample,
         'Word2Vec model initialized',
         ))
 
     word2vec_model = gensim.models.Word2Vec(size=size, alpha=alpha, window=window, sg=skipgram,\
         hs=hierarchical_softmax, negative=negative, cbow_mean=cbow_mean, iter=iterations,\
-        workers=workers)
+        workers=workers, sample=sample)
 
     return word2vec_model
 
