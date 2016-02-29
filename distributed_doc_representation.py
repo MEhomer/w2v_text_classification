@@ -8,6 +8,9 @@ import copy
 import time
 import random
 import inspect
+# import logging
+
+# logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
 import gensim
 
@@ -85,7 +88,7 @@ def extract_features(document, doc2vec_model, trained=True):
     else:
         return doc2vec_model.infer_vector(word_list(document))
 
-def make_doc2vec(size=100, window=5, dm=1, hierarchical_softmax=1, negative=0, dm_mean=0, dm_concat=0, dbow_words=0, workers=4, min_count=2):
+def make_doc2vec(size=100, window=5, dm=1, hierarchical_softmax=1, negative=0, dm_mean=0, dm_concat=0, dbow_words=0, workers=4, min_count=2, sample=0, logger_name=__name__):
     '''
         Initialize a doc2vec model using the gensim package.
 
@@ -124,7 +127,14 @@ def make_doc2vec(size=100, window=5, dm=1, hierarchical_softmax=1, negative=0, d
             doc2vec_model : <gensim.models.Doc2Vec>
                 The doc2vec model
     '''
-    doc2vec_model = gensim.models.Doc2Vec(size=size, window=window, dm=dm, hs=hierarchical_softmax, negative=negative, dm_mean=dm_mean, dm_concat=dm_concat, dbow_words=dbow_words, workers=workers, min_count=min_count)
+    logger = util.get_logger(logger_name)
+    logger.info('Function={0}, Size={1},  Window={2}, DM={3}, HierarchicalSoftmax={4}, NegativeSamplings={5}, DMMean={6}, DMConcat={7}, DBOWWords={8}, MINCount={9}, Workers={10}, Message="{11}"'.format(
+        inspect.currentframe().f_code.co_name,
+        size, window, dm, hierarchical_softmax,
+        negative, dm_mean, dm_concat, dbow_words, min_count, workers,
+        'Word2Vec model initialized',
+        ))
+    doc2vec_model = gensim.models.Doc2Vec(size=size, window=window, dm=dm, hs=hierarchical_softmax, negative=negative, dm_mean=dm_mean, dm_concat=dm_concat, dbow_words=dbow_words, workers=workers, min_count=min_count, sample=sample)
 
     return doc2vec_model
 
@@ -330,14 +340,20 @@ def main():
     '''
     logger_name = 'DistributedRepresentationLogger'
     util.setup_logger(logger_name, os.path.join('logs', 'distributed_representation.log'))
+    logger = util.get_logger(logger_name)
 
-    dataset = util.read_dataset_threaded(os.path.join('data', 'raw_texts.txt'), processes=2,\
+    logger.info('ID={0}'.format(time.time()))
+
+    dataset = util.read_dataset_threaded(os.path.join('data', 'raw_texts.txt'), processes=8,\
         logger_name=logger_name)
 
-    doc2vec_base_model = make_doc2vec(dm=0, negative=5, hierarchical_softmax=0, window=10, size=400, workers=8)
-    model = linear_model.LogisticRegression()
+    doc2vec_base_model = make_doc2vec(size=400, window=5, dm=0, hierarchical_softmax=0, 
+        negative=5, dm_mean=0, dm_concat=0, dbow_words=1, workers=8, min_count=2, sample=0,
+        logger_name=logger_name)
 
-    evaluate(dataset, model, doc2vec_base_model, k_folds=6, iterations=20, logger_name=logger_name)
+    model = linear_model.LogisticRegression()
+    evaluate(dataset, model, doc2vec_base_model, k_folds=6, iterations=1, alpha=0.020,
+    logger_name=logger_name)
 
 if __name__ == '__main__':
     main()
