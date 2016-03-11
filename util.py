@@ -251,7 +251,7 @@ def read_dataset_threaded(file_name, processes=4, logger_name=__name__):
     file_reader.close()
 
     pool = multiprocessing.Pool(processes=processes)
-    dataset = pool.map(process_line, lines[:10])
+    dataset = pool.map(process_line, lines)
     pool.close()
     pool.join()
 

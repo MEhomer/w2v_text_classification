@@ -18,6 +18,7 @@ from sklearn import metrics
 from sklearn import linear_model
 
 import util
+import wrappers
 import cross_validation
 
 def word_list(document):
@@ -64,7 +65,7 @@ def to_tagged_document(document):
 
     return tagged_document
 
-def extract_features(document, doc2vec_model, trained=True):
+def extract_features(document, doc2vec_model, trained=True, alpha=0.1, min_alpha=0.0001, steps=5):
     '''
         Returns the doc vector for this document from the doc2vec model
 
@@ -86,7 +87,8 @@ def extract_features(document, doc2vec_model, trained=True):
     if trained is True:
         return doc2vec_model.docvecs[document[1]]
     else:
-        return doc2vec_model.infer_vector(word_list(document))
+        return doc2vec_model.infer_vector(
+            word_list(document), alpha=alpha, min_alpha=min_alpha, steps=steps)
 
 def make_doc2vec(size=100, window=5, dm=1, hierarchical_softmax=1, negative=0, dm_mean=0, dm_concat=0, dbow_words=0, workers=4, min_count=2, sample=0, logger_name=__name__):
     '''
@@ -239,6 +241,7 @@ def evaluate(dataset, model, doc2vec_base_model, alpha=0.025, iterations=1, k_fo
         for j in xrange(len(split_data)):
             if i != j:
                 train_data += split_data[j]
+            # train_data += split_data[j]
 
         start_time = time.time()
         doc2vec_model = copy.deepcopy(doc2vec_base_model)
@@ -347,12 +350,18 @@ def main():
     dataset = util.read_dataset_threaded(os.path.join('data', 'raw_texts.txt'), processes=8,\
         logger_name=logger_name)
 
-    doc2vec_base_model = make_doc2vec(size=400, window=5, dm=0, hierarchical_softmax=0, 
-        negative=5, dm_mean=0, dm_concat=0, dbow_words=1, workers=8, min_count=2, sample=0,
+    doc2vec_base_model_dbow = make_doc2vec(size=400, window=5, dm=0, hierarchical_softmax=0, 
+        negative=10, dm_mean=0, dm_concat=0, dbow_words=1, workers=8, min_count=2, sample=0,
         logger_name=logger_name)
 
-    model = linear_model.LogisticRegression()
-    evaluate(dataset, model, doc2vec_base_model, k_folds=6, iterations=1, alpha=0.020,
+    doc2vec_base_model_dm = make_doc2vec(size=400, window=5, dm=1, hierarchical_softmax=1, 
+        negative=0, dm_mean=0, dm_concat=0, dbow_words=0, workers=8, min_count=2, sample=0,
+        logger_name=logger_name)
+
+    doc2vec_base_model = wrappers.ConcatDoc2vec([doc2vec_base_model_dbow, doc2vec_base_model_dm])
+
+    model = linear_model.LogisticRegression(solver='lbfgs')
+    evaluate(dataset, model, doc2vec_base_model, k_folds=6, iterations=5, alpha=0.025,
     logger_name=logger_name)
 
 if __name__ == '__main__':

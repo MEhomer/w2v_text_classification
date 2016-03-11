@@ -48,8 +48,8 @@ def texts_iterator(dataset, class_id):
         Arguments:
             dataset : <list>
                 The dataset from where the line needs to be taken
-            class_id : <int>
-                The class_id which should be extracted
+            class_id : <list>
+                A list of the class_id which should be extracted
         Yields:
             line : <list>
                 The line where the class_id is equal to class_id
@@ -65,8 +65,8 @@ def sentence_iterator(dataset, class_id):
         Arguments:
             dataset : <list>
                 The dataset from where the sentences to be taken
-            class_id : <int>
-                The class_id which should be extracted
+            class_id : <list>
+                A list of the class_id which should be extracted
         Yields:
             sentence : <list>
                 A list of words
@@ -232,9 +232,41 @@ def docsprob(docs, models, logger_name=__name__):
 
     print 'After Mean'
 
-    return np.array(prob).tolist()
+    return np.array(prob)
 
-def evaluate(dataset, word2vec_model, k_folds=10, shuffle=True, seed=0, logger_name=__name__):
+def predict(probs, training_dataset=None, num_classes=None):
+    '''
+        Predicts the correct class for the given probabilities.
+
+        Arguments:
+            probs : <np.ndarray>
+                A matrix where the rows are documents, and the columns are probabilities for the
+                respectful class.
+            training_dataset : <list>
+                The dataset on which the model was trained. Here we will calculate the prior
+                probabilities.
+            num_classes : <int>
+                Number of classes in the dataset
+        Returns:
+            predictions : <list>
+                A list of predicted classes.
+    '''
+    predictions = []
+
+    if training_dataset is not None:
+        prior_counts = np.array([float(len(list(texts_iterator(training_dataset, [class_id])))) for
+            class_id in xrange(num_classes)])
+        prior_probs = prior_counts / np.sum(prior_counts)
+
+        probs = np.multiply(probs, prior_probs) / np.sum(np.multiply(probs, prior_probs), 0)
+
+    probs = probs.tolist()
+    for i in xrange(len(probs)):
+        predictions.append(probs[i].index(max(probs[i])))
+    
+    return predictions
+
+def evaluate(dataset, word2vec_model, priors=False, k_folds=10, shuffle=True, seed=0, logger_name=__name__):
     '''
         Evaluate the models
 
@@ -246,6 +278,9 @@ def evaluate(dataset, word2vec_model, k_folds=10, shuffle=True, seed=0, logger_n
                     [[word <str>, ...], ...]
             word2vec_model : <gensim.models.Word2Vec>
                 The base word2vec model
+            priors : <bool>
+                Whether or not to use prior probabilities when classifying
+                Default value is False
             k_folds : <int>
                 Number of folds for training/testing
                 Default value is 10
@@ -280,9 +315,13 @@ def evaluate(dataset, word2vec_model, k_folds=10, shuffle=True, seed=0, logger_n
         end_time = time.time()
         prediction_time = end_time - start_time
 
-        predictions = []
-        for i in xrange(len(probs)):
-            predictions.append(probs[i].index(max(probs[i])))
+        training_dataset=None
+        num_classes=None
+        if priors:
+            training_dataset = train_data
+            num_classes = len(util.CLASS_MAP)
+
+        predictions = predict(probs, training_dataset, num_classes)
 
         trues = []
         for i in xrange(len(test_data)):
@@ -348,12 +387,12 @@ def main():
 
     logger.info('ID={0}'.format(time.time()))
 
-    word2vec_model = make_word2vec(iterations=13, size=100, skipgram=0, alpha=0.05, workers=4, 
+    word2vec_model = make_word2vec(iterations=1, size=100, skipgram=1, alpha=0.025, workers=4,
         logger_name=logger_name)
     dataset = util.read_dataset_threaded(os.path.join('data', 'raw_texts.txt'), processes=10,
         logger_name=logger_name)
 
-    evaluate(dataset, word2vec_model, k_folds=6, logger_name=logger_name)
+    evaluate(dataset, word2vec_model, priors=True, k_folds=6, logger_name=logger_name)
 
 if __name__ == '__main__':
     main()

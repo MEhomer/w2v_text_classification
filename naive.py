@@ -11,7 +11,9 @@ import inspect
 import gensim
 import numpy as np
 
+from sklearn import svm
 from sklearn import metrics
+from sklearn import neighbors
 from sklearn import linear_model
 
 import util
@@ -98,7 +100,7 @@ def tfidf_model(dataset, logger_name=__name__):
 
     logger.info('Function={0}, Texts={2}, VocabSize={2}, Message="{3}"'.format(
         inspect.currentframe().f_code.co_name,
-        len(texts), len(dictionary),
+        len(dataset), len(dictionary),
         'Finished calculate tfidf scores'
         ))
 
@@ -181,7 +183,7 @@ def make_word2vec(size=100, alpha=0.025, window=5, skipgram=1, hierarchical_soft
     logger.info('Function={0}, Size={1}, Alpha={2}, Window={3}, Skipgram={4}, HierarchicalSoftmax={5}, NegativeSamplings={6}, CbowMean={7}, Iterations={8}, Sample={9}, Workers={10}, Message="{11}"'.format(
         inspect.currentframe().f_code.co_name,
         size, alpha, window, skipgram, hierarchical_softmax,
-        negative, cbow_mean, iterations, workers, sample,
+        negative, cbow_mean, iterations, sample, workers,
         'Word2Vec model initialized',
         ))
 
@@ -369,6 +371,20 @@ def evaluate(dataset, model, word2vec_base_model, k_folds=10, shuffle=True, seed
             classification_report
             ))
 
+        word2vec_model = None
+        train_tfidf_scores = None
+        dictionary = None
+        tfidf = None
+        train_features = None
+        train_classes = None
+        current_model = None
+        test_texts = None
+        test_corpus = None
+        test_tfidf_scores = None
+        test_features = None
+        test_classes = None
+        prediction_classes = None
+
     logger.info('Function={0}, Score={1}, Message="{2}"'.format(
         inspect.currentframe().f_code.co_name,
         sum(scores) / float(len(scores)),
@@ -383,12 +399,23 @@ def main():
     '''
     logger_name = 'NaiveLogger'
     util.setup_logger(logger_name, os.path.join('logs', 'naive.log'))
+    logger = util.get_logger(logger_name)
 
-    dataset = util.read_dataset_threaded(os.path.join('data', 'raw_texts.txt'), processes=2,\
+    logger.info('ID={0}'.format(time.time()))
+
+    dataset = util.read_dataset_threaded(os.path.join('data', 'raw_texts.txt'), processes=8,
         logger_name=logger_name)
+    word2vec_base_model = make_word2vec(iterations=10, size=900, skipgram=1,
+        hierarchical_softmax=0, negative=14, alpha=0.025, sample=1e-5, workers=8,
+        logger_name=logger_name)
+    
+    # model = linear_model.SGDClassifier(loss='modified_huber')
 
-    word2vec_base_model = make_word2vec(iterations=1, size=250, logger_name=logger_name)
-    model = linear_model.LogisticRegression()
+    # model = linear_model.LogisticRegression(solver='lbfgs', n_jobs=1)
+
+    # model = neighbors.NearestCentroid()
+
+    model = svm.SVC(kernel='linear')
 
     evaluate(dataset, model, word2vec_base_model, k_folds=6, logger_name=logger_name)
 
