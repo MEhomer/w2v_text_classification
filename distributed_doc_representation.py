@@ -14,6 +14,7 @@ import inspect
 
 import gensim
 
+from sklearn import svm
 from sklearn import metrics
 from sklearn import linear_model
 
@@ -245,7 +246,8 @@ def evaluate(dataset, model, doc2vec_base_model, alpha=0.025, iterations=1, k_fo
 
         start_time = time.time()
         doc2vec_model = copy.deepcopy(doc2vec_base_model)
-        doc2vec_model = train_doc2vec(train_data, doc2vec_model, iterations=iterations, alpha=alpha, logger_name=logger_name)
+        doc2vec_model = train_doc2vec(train_data, doc2vec_model, iterations=iterations,
+            alpha=alpha, logger_name=logger_name)
         end_time = time.time()
         train_time_doc2vec_model = end_time - start_time
 
@@ -354,14 +356,16 @@ def main():
         negative=10, dm_mean=0, dm_concat=0, dbow_words=1, workers=8, min_count=2, sample=0,
         logger_name=logger_name)
 
-    doc2vec_base_model_dm = make_doc2vec(size=400, window=5, dm=1, hierarchical_softmax=1, 
-        negative=0, dm_mean=0, dm_concat=0, dbow_words=0, workers=8, min_count=2, sample=0,
-        logger_name=logger_name)
+    # doc2vec_base_model_dm = make_doc2vec(size=400, window=5, dm=1, hierarchical_softmax=1, 
+    #     negative=0, dm_mean=0, dm_concat=0, dbow_words=0, workers=8, min_count=2, sample=0,
+    #     logger_name=logger_name)
 
-    doc2vec_base_model = wrappers.ConcatDoc2vec([doc2vec_base_model_dbow, doc2vec_base_model_dm])
+    # doc2vec_base_model = wrappers.ConcatDoc2vec([doc2vec_base_model_dbow, doc2vec_base_model_dm])
 
-    model = linear_model.LogisticRegression(solver='lbfgs')
-    evaluate(dataset, model, doc2vec_base_model, k_folds=6, iterations=5, alpha=0.025,
+    # model = linear_model.LogisticRegression(solver='lbfgs')
+    model = svm.SVC(kernel='linear')
+
+    evaluate(dataset, model, doc2vec_base_model_dbow, k_folds=6, iterations=1, alpha=0.025,
     logger_name=logger_name)
 
 if __name__ == '__main__':
